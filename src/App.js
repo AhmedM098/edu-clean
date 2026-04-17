@@ -809,12 +809,21 @@ function SubjectPage({ subject, userData, onBack, onLesson, onUnitQuiz }) {
     </div>
   );
 }
-
 // ── Lesson Page ────────────────────────────────────────────────────────────────
 function LessonPage({ lesson, unit, subject, userData, onBack, onQuizDone }) {
   const [answers, setAnswers] = useState({});
   const [submitted, setSubmitted] = useState(false);
   const [score, setScore] = useState(0);
+  const [firebaseVideo, setFirebaseVideo] = useState(null);
+
+  useEffect(() => {
+    const videoRef = ref(db, `videos/${subject.id}/${unit.id}/${lesson.id}`);
+    get(videoRef).then(snap => {
+      if (snap.exists()) setFirebaseVideo(snap.val());
+    });
+  }, [lesson.id]);
+
+  const videoUrl = firebaseVideo || lesson.video;
   const lp = userData.lessonProgress || {};
   const alreadyDone = lp[`${subject.id}_${unit.id}_${lesson.id}`];
   const letters = ["أ","ب","ج","د"];
@@ -823,7 +832,6 @@ function LessonPage({ lesson, unit, subject, userData, onBack, onQuizDone }) {
     if (submitted) return;
     setAnswers(p => ({...p, [qi]: opt}));
   };
-
   const submit = () => {
     if (Object.keys(answers).length < lesson.questions.length) return;
     let s = 0;
@@ -835,18 +843,17 @@ function LessonPage({ lesson, unit, subject, userData, onBack, onQuizDone }) {
   };
 
   const stars = submitted ? (score === lesson.questions.length ? 3 : score >= lesson.questions.length * 0.6 ? 2 : 1) : 0;
-
-  return (
+return (
     <div className="lesson-page">
       <button className="back-btn" onClick={onBack}>← رجوع للوحدة</button>
       <div className="lesson-card">
         <div className="lesson-title">{subject.emoji} {lesson.title}</div>
-        {lesson.video ? (
+        {videoUrl ? (
           <div className="video-wrap">
-            <iframe src={lesson.video} title={lesson.title} allowFullScreen />
+            <iframe src={videoUrl} title={lesson.title} allowFullScreen />
           </div>
         ) : (
-          <div className="no-video">🎥 فيديو قريباً</div>
+          <div className="no-video">🎥 لا يوجد فيديو لهذا الدرس</div>
         )}
         <div className="lesson-content">{lesson.content}</div>
       </div>
