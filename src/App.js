@@ -384,7 +384,9 @@ body{font-family:'Tajawal',sans-serif;background:var(--bg);color:var(--text);min
 .unit-lessons{border-top:2px solid var(--border)}
 .lesson-row{padding:13px 18px;display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--border);cursor:pointer;transition:all .15s}
 .lesson-row:last-child{border-bottom:none}
-.lesson-row:hover{background:#f8f8f8;transform:translateX(-2px)}
+.lesson-row:hover:not(.locked){background:#f8f8f8;transform:translateX(-2px)}
+.lesson-row.locked{opacity:.55;cursor:not-allowed;background:#fafafa}
+.lesson-row.locked:hover{background:#fafafa;transform:none}
 .l-num{width:34px;height:34px;border-radius:9px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:14px}
 .l-name{font-size:15px;font-weight:800}
 .l-sub{font-size:11px;color:var(--muted);font-weight:600;margin-top:1px}
@@ -414,6 +416,9 @@ body{font-family:'Tajawal',sans-serif;background:var(--bg);color:var(--text);min
 .lq-opt.correct .lq-dot{background:var(--green);color:#fff}
 .lq-opt.wrong   .lq-dot{background:var(--red);color:#fff}
 .lesson-score{background:linear-gradient(135deg,#e8f5e9,#f3e5f5);border-radius:16px;padding:20px;text-align:center;border:2px solid var(--green)}
+.lesson-score.failed{background:linear-gradient(135deg,#ffebee,#fff8f0);border-color:var(--red)}
+.lesson-score.failed .ls-title{color:var(--red)}
+.lesson-score.failed .ls-score{color:var(--red)}
 .ls-title{font-family:'Fredoka One',cursive;font-size:22px;color:var(--green);margin-bottom:4px}
 .ls-sub{color:var(--muted);font-size:14px;font-weight:700;margin-bottom:16px}
 .ls-score{font-family:'Fredoka One',cursive;font-size:40px;color:var(--green)}
@@ -786,14 +791,17 @@ function SubjectPage({ subject, userData, onBack, onLesson, onUnitQuiz }) {
                 <div className="unit-lessons">
                   {unit.lessons.map((lesson, li) => {
                     const done = lp[`${subject.id}_${unit.id}_${lesson.id}`];
+                    const prevLesson = li > 0 ? unit.lessons[li - 1] : null;
+                    const prevKey = prevLesson ? `${subject.id}_${unit.id}_${prevLesson.id}` : null;
+                    const isLocked = li > 0 && !lp[prevKey];
                     return (
-                      <div key={lesson.id} className="lesson-row" onClick={() => onLesson(unit, lesson)}>
+                      <div key={lesson.id} className={`lesson-row${isLocked?" locked":""}`} onClick={() => !isLocked && onLesson(unit, lesson)}>
                         <div className="l-num" style={{background:subject.bg,color:subject.color}}>{li+1}</div>
                         <div>
                           <div className="l-name">{lesson.title}</div>
                           <div className="l-sub">📄 شرح + {lesson.questions.length} أسئلة</div>
                         </div>
-                        <span className="l-badge">{done ? "✅" : "▶️"}</span>
+                        <span className="l-badge">{isLocked ? "🔒" : done ? "✅" : "▶️"}</span>
                       </div>
                     );
                   })}
@@ -838,10 +846,16 @@ function LessonPage({ lesson, unit, subject, userData, onBack, onQuizDone }) {
     lesson.questions.forEach((q, i) => { if (answers[i] === q.answer) { s++; playBeep("correct"); } else playBeep("wrong"); });
     setScore(s);
     setSubmitted(true);
-    if (s === lesson.questions.length) { setTimeout(() => playBeep("success"), 300); }
-    onQuizDone(s, lesson.questions.length);
+    const passScore = Math.min(2, lesson.questions.length);
+    const passed = s >= passScore;
+    if (passed) {
+      setTimeout(() => playBeep("success"), 300);
+      onQuizDone(s, lesson.questions.length);
+    }
   };
 
+  const passScore = Math.min(2, lesson.questions.length);
+  const passed = submitted && score >= passScore;
   const stars = submitted ? (score === lesson.questions.length ? 3 : score >= lesson.questions.length * 0.6 ? 2 : 1) : 0;
 return (
     <div className="lesson-page">
@@ -890,16 +904,21 @@ return (
             </button>
           )}
           {submitted && (
-            <div className="lesson-score">
+            <div className={`lesson-score${!passed?" failed":""}`}>
               <div className="ls-title">
-                {stars===3?"🎉 ممتاز!":stars===2?"👍 كويس!":"💪 حاول تاني!"}
+                {passed
+                  ? (stars===3?"🎉 ممتاز!":"👍 كويس! أنت ناجح")
+                  : "❌ لم تجتز الاختبار"}
               </div>
               <div className="ls-score">{score}/{lesson.questions.length}</div>
-              <div className="stars">{"⭐".repeat(stars)}{"☆".repeat(3-stars)}</div>
-              <div className="ls-xp">⚡ كسبت {Math.round((score/lesson.questions.length)*subject.xp)} XP</div>
+              {passed && <div className="stars">{"⭐".repeat(stars)}{"☆".repeat(3-stars)}</div>}
+              {!passed && <div style={{color:"#e53935",fontWeight:800,fontSize:14,marginBottom:8}}>تحتاج {passScore} درجات على الأقل للنجاح. حاول مرة أخرى!</div>}
+              {passed && <div className="ls-xp">⚡ كسبت {Math.round((score/lesson.questions.length)*subject.xp)} XP</div>}
               <div className="ls-btns">
-                <button className="btn-sm btn-sm-o" onClick={onBack}>← رجوع</button>
-                <button className="btn-sm btn-sm-g" onClick={() => { setAnswers({}); setSubmitted(false); setScore(0); }}>🔁 مرة تانية</button>
+                {passed
+                  ? <button className="btn-sm btn-sm-o" onClick={onBack}>← رجوع للوحدة</button>
+                  : <button className="btn-sm btn-sm-g" style={{background:"var(--red)",boxShadow:"0 3px 0 #a00"}} onClick={() => { setAnswers({}); setSubmitted(false); setScore(0); }}>🔁 أعد الاختبار</button>
+                }
               </div>
             </div>
           )}
@@ -1027,8 +1046,10 @@ function AdminPage({ onBack }) {
     });
   }, []);
 
-  const allRes = users.flatMap(u => (u.results||[]).map(r=>({...r,sName:u.name||"؟"}))).sort((a,b)=>b.ts-a.ts);
-  const totalXP = users.reduce((a,u)=>a+(u.xp||0),0);
+const allRes = users.flatMap(u => {
+  const res = u.results ? (Array.isArray(u.results) ? u.results : Object.values(u.results)) : [];
+  return res.map(r=>({...r,sName:u.name||"؟"}));
+}).sort((a,b)=>b.ts-a.ts);  const totalXP = users.reduce((a,u)=>a+(u.xp||0),0);
   const avg = allRes.length ? Math.round(allRes.reduce((a,r)=>a+(r.score/r.total)*100,0)/allRes.length) : 0;
   const badge = (s,t) => { const p=(s/t)*100; if(p>=80) return <span className="badge bg">ممتاز</span>; if(p>=60) return <span className="badge by">كويس</span>; return <span className="badge br">ضعيف</span>; };
 
@@ -1106,7 +1127,7 @@ function AdminPage({ onBack }) {
                   <td><b>{u.name||"—"}</b></td>
                   <td><span className={`badge ${u.role==="admin"?"by":"bg"}`}>{u.role==="admin"?"أدمن":"طالب"}</span></td>
                   <td>⚡{u.xp||0}</td>
-                  <td>{(u.results||[]).length}</td>
+                 <td>{u.results ? (Array.isArray(u.results) ? u.results : Object.values(u.results)).length : 0}</td>
                   <td>{Object.keys(u.lessonProgress||{}).length}</td>
                 </tr>
               ))}</tbody>
